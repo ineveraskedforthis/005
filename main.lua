@@ -26,13 +26,13 @@ local from_server_size = 4 * 4;
 local to_server_size = 5 * 4;
 
 
-function love.load()
+function love.load(args)
 	print("Game started")
 
 	TCP = socket.tcp() 
 	
 	TCP:settimeout(0)
-	TCP:connect("127.0.0.1", 8080)
+	TCP:connect(args[1] or "127.0.0.1", tonumber(args[2]) or 8080)
 
 	print("Connected")
 
