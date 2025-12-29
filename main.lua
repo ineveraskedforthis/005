@@ -55,6 +55,7 @@ function love.load(args)
 
 	MY_ID = nil;
 	MY_SELECTION = nil
+	MY_CLASS = nil
 end
 
 
@@ -114,11 +115,11 @@ function love.update(dt)
 
 		if (buf[0].data_type == 3) then
 			local lua_index = tonumber(buf[0].id)
-			if buf[0].event == 1 then
-				FIGHTERS[lua_index].cast_progress = 1
-			end
-			if buf[0].event == 2 then
-				FIGHTERS[lua_index].parry_progress = 0.3
+			if buf[0].x > 0 then
+				if FIGHTERS[lua_index] then
+					FIGHTERS[lua_index].progress = buf[0].x
+					FIGHTERS[lua_index].max_progress = buf[0].x
+				end
 			end
 			if buf[0].event == 3 then
 				FIGHTERS[lua_index].no_damage_timer = 0.3
@@ -129,7 +130,7 @@ function love.update(dt)
 			if buf[0].event == 5 and lua_index == MY_ID then
 				CURRENT_SCENE = SCENE_FIGHT
 			end
-			if buf[0].event == 6 then
+			if buf[0].event == 6 or buf[0].event == 9 then
 				FIGHTERS[lua_index] = nil
 			end
 		end
@@ -138,15 +139,8 @@ function love.update(dt)
 	end
 
 	for i, val in pairs(FIGHTERS) do
-
-		if val.cast_progress then
-			val.cast_progress = math.max(0, val.cast_progress - dt)
-		end
-		if val.parry_progress then
-			val.parry_progress = math.max(0, val.parry_progress - dt)
-		end
-		if val.no_damage_timer then
-			val.no_damage_timer = math.max(0, val.no_damage_timer - dt)
+		if val.progress then
+			val.progress = math.max(0, val.progress - dt)
 		end
 	end
 end
@@ -226,15 +220,17 @@ function love.draw(dt)
 	for i, val in pairs(FIGHTERS) do
 		if (val.hp > 0) then
 			love.graphics.setColor(0.5, 0.5, 0.5)
-			love.graphics.circle("fill", val.x, val.y, 10)
-	
+			love.graphics.circle("fill", val.x, val.y, 3)
+			
+			love.graphics.circle("line", val.x, val.y, 160 * 0.1)
+
 			if (i == MY_SELECTION) then
-				love.graphics.circle("line", val.x, val.y, 15)
+				love.graphics.circle("line", val.x, val.y, 10)
 			end
 
 			if val.no_damage_timer and val.no_damage_timer > 0 then
 				love.graphics.setColor(1, 1, 0)
-				love.graphics.circle("line", val.x, val.y, 10)
+				love.graphics.circle("line", val.x, val.y, 3)
 			end
 
 			hp_size = 5
@@ -248,12 +244,14 @@ function love.draw(dt)
 				love.graphics.rectangle("line", val.x + 15, val.y - 10 + hitpoint * hp_size, hp_size, hp_size) 
 			end
 			
-			if val.cast_progress and val.cast_progress > 0 then
-				love.graphics.rectangle("fill", val.x - 10, val.y + 10, val.cast_progress * 20, 5)
-			end
-
-			if val.parry_progress and val.parry_progress > 0 then
-				love.graphics.rectangle("fill", val.x - 10, val.y + 20, val.parry_progress / 0.3 * 20, 5)
+			if val.progress and val.progress > 0 then
+				love.graphics.rectangle(
+					"fill", 
+					val.x - 10, 
+					val.y + 10, 
+					val.progress / val.max_progress * 20, 
+					5
+				)
 			end
 		end
 	end
@@ -265,6 +263,25 @@ function love.draw(dt)
 	end
 
 	love.graphics.circle("line", 320, 320, 160)
+
+
+	love.graphics.print("LMB: MOVE", 20, 20)
+	love.graphics.print("TAB: SELECT_NEXT_TARGET", 20, 40)
+	love.graphics.print("W: PARRY", 20, 60)
+
+	if MY_CLASS == 0 then
+		love.graphics.print("SPACE: SPELL", 20, 80)
+	end
+
+	if MY_CLASS == 1 then
+		love.graphics.print("SPACE: ATTACK", 20, 80)
+		love.graphics.print("D: CHARGE", 20, 100)
+	end
+
+	if MY_CLASS == 2 then
+		love.graphics.print("SPACE: ATTACK", 20, 80)
+		love.graphics.print("D: INVISIBILITY", 20, 100)
+	end
 end
 
 
@@ -300,6 +317,7 @@ function love.mousepressed(x, y, button)
 				CLASS_SELECTOR_W,
 				CLASS_SELECTOR_H
 			) then
+				MY_CLASS = i
 				local data = ffi.new("to_server[1]")
 				data[0].data_type = 4
 				data[0].data_data = i
@@ -366,13 +384,37 @@ function love.keypressed(key, scancode, isrepeat)
 
 	if key == "space" and MY_SELECTION then
 		local data = ffi.new("to_server[1]")
-		data[0].data_type = 1
+		if MY_CLASS == 0 then
+			data[0].data_type = 1
+		else
+			data[0].data_type = 7
+		end
 		data[0].id = MY_ID
 		data[0].target = MY_SELECTION
 		local buffer = ffi.new("uint8_t["..tostring(to_server_size).."]")
 		ffi.C.memcpy(buffer, data, to_server_size)
 		print("send spell")
 		TCP:send(ffi.string(buffer, to_server_size))
+	end
+
+	if key == "d" then
+		local data = ffi.new("to_server[1]")
+		
+		data[0].id = MY_ID
+
+		if MY_CLASS == 1 then
+			if MY_SELECTION == nil then
+				return
+			end
+			data[0].data_type = 9
+			data[0].target = MY_SELECTION
+		end
+
+		if MY_CLASS == 2 then
+			data[0].data_type = 8
+		end
+
+		send_payload(data)
 	end
 
 	if key == "w" then
