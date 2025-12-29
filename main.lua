@@ -58,8 +58,51 @@ function love.load(args)
 	MY_CLASS = nil
 end
 
+CONTROL_RATE = 1 / 30
+CURRENT_CONTROL_TIMER = 0
+
+LAST_DX = 0
+LAST_DY = 0
+
+SCALE = 250
+SHIFT_X = 320
+SHIFT_Y = 320
 
 function love.update(dt)
+	if MY_ID then
+		local dx = 0
+		local dy = 0
+
+		if love.keyboard.isDown( "w" ) then
+			dy = dy - 1
+		end
+		if love.keyboard.isDown( "a" ) then
+			dx = dx - 1
+		end
+		if love.keyboard.isDown( "s" ) then
+			dy = dy + 1
+		end
+		if love.keyboard.isDown( "d" ) then
+			dx = dx + 1
+		end
+
+		if dx ~= LAST_DX or dy ~= LAST_DY then
+			CURRENT_CONTROL_TIMER = CONTROL_RATE
+
+			LAST_DX = dx
+			LAST_DY = dy
+			
+			local data = ffi.new("to_server[1]")
+			data[0].x = dx
+			data[0].y = dy
+			data[0].data_type = 0
+			data[0].id = MY_ID
+
+			send_payload(data);
+		end
+	end
+
+
 	local data, error = TCP:receive(16)
 
 	while data ~= nil do	
@@ -76,13 +119,13 @@ function love.update(dt)
 			local lua_index = tonumber(buf[0].id)
 			if (FIGHTERS[lua_index] == nil) then
 				FIGHTERS[lua_index] = {
-					x = 320 + buf[0].x * 160,
-					y = 320 + buf[0].y * 160,
+					x = SHIFT_X + buf[0].x * SCALE,
+					y = SHIFT_Y + buf[0].y * SCALE,
 					hp = buf[0].additional_data
 				}
 			else
-				FIGHTERS[lua_index].x = 320 + buf[0].x * 160
-				FIGHTERS[lua_index].y = 320 + buf[0].y * 160
+				FIGHTERS[lua_index].x = SHIFT_X + buf[0].x * SCALE
+				FIGHTERS[lua_index].y = SHIFT_Y + buf[0].y * SCALE
 				FIGHTERS[lua_index].hp = buf[0].additional_data
 			end
 
@@ -92,12 +135,12 @@ function love.update(dt)
 			local lua_index = tonumber(buf[0].id)
 			if PROJECTILES[lua_index] == nil then
 				PROJECTILES[lua_index] = {
-					x = 320 + buf[0].x * 160,
-					y = 320 + buf[0].y * 160
+					x = SHIFT_X + buf[0].x * SCALE,
+					y = SHIFT_Y + buf[0].y * SCALE
 				}
 			else
-				PROJECTILES[lua_index].x = 320 + buf[0].x * 160
-				PROJECTILES[lua_index].y = 320 + buf[0].y * 160
+				PROJECTILES[lua_index].x = SHIFT_X + buf[0].x * SCALE
+				PROJECTILES[lua_index].y = SHIFT_X + buf[0].y * SCALE
 			end
 		end
 	
@@ -112,26 +155,24 @@ function love.update(dt)
 				send_payload(data)				
 			end
 		end
-
+		
 		if (buf[0].data_type == 3) then
+			print(tostring(buf[0].event))
 			local lua_index = tonumber(buf[0].id)
-			if buf[0].x > 0 then
+			if buf[0].event == 3 then
+				print("no damage")
+				FIGHTERS[lua_index].no_damage_timer = 0.3
+			elseif buf[0].event == 4 and lua_index == MY_ID then
+				CURRENT_SCENE = SCENE_CHOOSE_CLASS
+			elseif buf[0].event == 5 and lua_index == MY_ID then
+				CURRENT_SCENE = SCENE_FIGHT
+			elseif buf[0].event == 6 or buf[0].event == 9 then
+				FIGHTERS[lua_index] = nil
+			elseif buf[0].x > 0 then
 				if FIGHTERS[lua_index] then
 					FIGHTERS[lua_index].progress = buf[0].x
 					FIGHTERS[lua_index].max_progress = buf[0].x
 				end
-			end
-			if buf[0].event == 3 then
-				FIGHTERS[lua_index].no_damage_timer = 0.3
-			end
-			if buf[0].event == 4 and lua_index == MY_ID then
-				CURRENT_SCENE = SCENE_CHOOSE_CLASS
-			end
-			if buf[0].event == 5 and lua_index == MY_ID then
-				CURRENT_SCENE = SCENE_FIGHT
-			end
-			if buf[0].event == 6 or buf[0].event == 9 then
-				FIGHTERS[lua_index] = nil
 			end
 		end
 
@@ -141,6 +182,10 @@ function love.update(dt)
 	for i, val in pairs(FIGHTERS) do
 		if val.progress then
 			val.progress = math.max(0, val.progress - dt)
+		end
+
+		if val.no_damage_timer then
+			val.no_damage_timer = math.max(0, val.no_damage_timer - dt)
 		end
 	end
 end
@@ -222,7 +267,7 @@ function love.draw(dt)
 			love.graphics.setColor(0.5, 0.5, 0.5)
 			love.graphics.circle("fill", val.x, val.y, 3)
 			
-			love.graphics.circle("line", val.x, val.y, 160 * 0.1)
+			love.graphics.circle("line", val.x, val.y, SCALE * 0.1)
 
 			if (i == MY_SELECTION) then
 				love.graphics.circle("line", val.x, val.y, 10)
@@ -262,12 +307,12 @@ function love.draw(dt)
 		love.graphics.circle("fill", val.x, val.y, 3)
 	end
 
-	love.graphics.circle("line", 320, 320, 160)
+	love.graphics.circle("line", SHIFT_X, SHIFT_Y, SCALE)
 
 
-	love.graphics.print("LMB: MOVE", 20, 20)
+	love.graphics.print("WASD: MOVE", 20, 20)
 	love.graphics.print("TAB: SELECT_NEXT_TARGET", 20, 40)
-	love.graphics.print("W: PARRY", 20, 60)
+	love.graphics.print("K: PARRY", 20, 60)
 
 	if MY_CLASS == 0 then
 		love.graphics.print("SPACE: SPELL", 20, 80)
@@ -275,12 +320,12 @@ function love.draw(dt)
 
 	if MY_CLASS == 1 then
 		love.graphics.print("SPACE: ATTACK", 20, 80)
-		love.graphics.print("D: CHARGE", 20, 100)
+		love.graphics.print("J: CHARGE", 20, 100)
 	end
 
 	if MY_CLASS == 2 then
 		love.graphics.print("SPACE: ATTACK", 20, 80)
-		love.graphics.print("D: INVISIBILITY", 20, 100)
+		love.graphics.print("J: INVISIBILITY", 20, 100)
 	end
 end
 
@@ -329,15 +374,17 @@ function love.mousepressed(x, y, button)
 		return
 	end
 
-	local data = ffi.new("to_server[1]")
-	data[0].x = (x - 320) / 160
-	data[0].y = (y - 320) / 160
-	data[0].data_type = 0
-	data[0].id = MY_ID
-	local buffer = ffi.new("uint8_t[" .. tostring(to_server_size) .. "]")
-	ffi.C.memcpy(buffer, data, to_server_size)
-	print("send command")
-	TCP:send(ffi.string(buffer, to_server_size))
+	if false then
+		local data = ffi.new("to_server[1]")
+		data[0].x = (x - SHIFT_X) / SCALE 
+		data[0].y = (y - SHIFT_Y) / SCALE
+		data[0].data_type = 0
+		data[0].id = MY_ID
+		local buffer = ffi.new("uint8_t[" .. tostring(to_server_size) .. "]")
+		ffi.C.memcpy(buffer, data, to_server_size)
+		print("send command")
+		TCP:send(ffi.string(buffer, to_server_size))
+	end
 end
 
 function love.keypressed(key, scancode, isrepeat)
@@ -397,7 +444,7 @@ function love.keypressed(key, scancode, isrepeat)
 		TCP:send(ffi.string(buffer, to_server_size))
 	end
 
-	if key == "d" then
+	if key == "j" then
 		local data = ffi.new("to_server[1]")
 		
 		data[0].id = MY_ID
@@ -417,7 +464,7 @@ function love.keypressed(key, scancode, isrepeat)
 		send_payload(data)
 	end
 
-	if key == "w" then
+	if key == "k" then
 		local data = ffi.new("to_server[1]")
 		data[0].data_type = 3 
 		data[0].id = MY_ID
