@@ -17,14 +17,26 @@ typedef struct {
 	float x; 
 	float y; 
 	uint8_t data_type;
-	uint8_t padding[3]; 
+	uint8_t data_data;
+	uint8_t padding[2]; 
 } to_server;
 void* memcpy( void *restrict dest, const void *restrict src, size_t count );
 ]]
 
 local from_server_size = 4 * 4;
-local to_server_size = 5 * 4;
 
+local to_server_size = 5 * 4;
+local payload_type = "uint8_t[" .. tostring(to_server_size) .. "]"
+
+function send_payload(data)
+	local buffer = ffi.new(payload_type)
+	ffi.C.memcpy(buffer, data, to_server_size)
+	TCP:send(ffi.string(buffer, to_server_size))
+end
+
+SCENE_CHOOSE_LOBBY = 0
+SCENE_CHOOSE_CLASS = 1
+SCENE_FIGHT = 2
 
 function love.load(args)
 	print("Game started")
@@ -38,6 +50,8 @@ function love.load(args)
 
 	FIGHTERS = {}
 	PROJECTILES = {}
+
+	CURRENT_SCENE = SCENE_CHOOSE_LOBBY	
 
 	MY_ID = nil;
 	MY_SELECTION = nil
@@ -90,6 +104,11 @@ function love.update(dt)
 			if buf[0].is_you > 0 then
 				print("I am " .. tostring(buf[0].id));
 				MY_ID = buf[0].id
+				
+				local data = ffi.new("to_server[1]")
+				data[0].data_type = 6
+				data[0].id = MY_ID
+				send_payload(data)				
 			end
 		end
 
@@ -103,6 +122,15 @@ function love.update(dt)
 			end
 			if buf[0].event == 3 then
 				FIGHTERS[lua_index].no_damage_timer = 0.3
+			end
+			if buf[0].event == 4 and lua_index == MY_ID then
+				CURRENT_SCENE = SCENE_CHOOSE_CLASS
+			end
+			if buf[0].event == 5 and lua_index == MY_ID then
+				CURRENT_SCENE = SCENE_FIGHT
+			end
+			if buf[0].event == 6 then
+				FIGHTERS[lua_index] = nil
 			end
 		end
 
@@ -123,8 +151,78 @@ function love.update(dt)
 	end
 end
 
+LOBBY_SELECTOR_X = 20
+LOBBY_SELECTOR_Y = 20
+LOBBY_SELECTOR_H = 20
+LOBBY_SELECTOR_W = 200
+CLASS_SELECTOR_X = 20
+CLASS_SELECTOR_Y = 20
+CLASS_SELECTOR_H = 20
+CLASS_SELECTOR_W = 200
+
+function in_rect(cx, cy, x, y, w, h) 
+	if cx < x then
+		return false
+	end
+	if cx > x + w then
+		return false
+	end
+	if cy < y then
+		return false
+	end
+	if cy > y + h then
+		return false
+	end
+	return true
+end
+
+CLASS_NAME = { "MAGE", "WARRIOR", "ROGUE" }
 
 function love.draw(dt)
+	
+	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
+		love.graphics.setColor(1, 1, 1)
+		for i = 0, 2 do
+			love.graphics.rectangle(
+				"line", 
+				LOBBY_SELECTOR_X, 
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
+				LOBBY_SELECTOR_W, 
+				LOBBY_SELECTOR_H
+			)
+
+			love.graphics.print(
+				"ENTER ROOM " .. tostring(i), 
+				LOBBY_SELECTOR_X, 
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i
+			)				
+		end
+
+		return
+	end
+
+	if CURRENT_SCENE == SCENE_CHOOSE_CLASS then
+		love.graphics.setColor(1, 1, 1)
+		for i = 0, 2 do
+			love.graphics.rectangle(
+				"line", 
+				CLASS_SELECTOR_X, 
+				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i, 
+				CLASS_SELECTOR_W, 
+				CLASS_SELECTOR_H
+			)
+
+			love.graphics.print(
+				"SELECT CLASS " .. CLASS_NAME[i + 1], 
+				CLASS_SELECTOR_X, 
+				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i
+			)
+		end
+
+		return
+	end
+
+
 	for i, val in pairs(FIGHTERS) do
 		if (val.hp > 0) then
 			love.graphics.setColor(0.5, 0.5, 0.5)
@@ -170,8 +268,46 @@ function love.draw(dt)
 end
 
 
+
 function love.mousepressed(x, y, button)
 	if MY_ID == nil then
+		return
+	end
+
+	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
+		for i = 0, 2 do
+			if in_rect(x, y, 
+				LOBBY_SELECTOR_X,
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i,
+				LOBBY_SELECTOR_W,
+				LOBBY_SELECTOR_H
+			) then
+				local data = ffi.new("to_server[1]")
+				data[0].data_type = 5
+				data[0].data_data = i
+				data[0].id = MY_ID
+				send_payload(data)
+			end
+		end
+		return
+	end
+
+	if CURRENT_SCENE == SCENE_CHOOSE_CLASS then
+		for i = 0, 2 do
+			if in_rect(x, y,
+				CLASS_SELECTOR_X,
+				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i,
+				CLASS_SELECTOR_W,
+				CLASS_SELECTOR_H
+			) then
+				local data = ffi.new("to_server[1]")
+				data[0].data_type = 4
+				data[0].data_data = i
+				data[0].id = MY_ID
+				send_payload(data)
+			end
+		end
+
 		return
 	end
 
