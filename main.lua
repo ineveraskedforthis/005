@@ -62,6 +62,11 @@ function love.load(args)
 
 	BG_IMAGE = love.graphics.newImage("bg.png")
 	BG_FIELD_IMAGE = love.graphics.newImage("bg_field.png")
+
+
+	SPRITE_MAGE_IDLE = love.graphics.newImage("mage-idle.png")
+	SPRITE_MAGE_MOVE = love.graphics.newImage("mage-move.png")
+	SPRITE_MAGE_CAST = love.graphics.newImage("mage-cast.png")
 end
 
 CONTROL_RATE = 1 / 30
@@ -134,12 +139,25 @@ function love.update(dt)
 				FIGHTERS[lua_index] = {
 					x = buf[0].x,
 					y = buf[0].y,
-					hp = buf[0].additional_data
+					hp = buf[0].additional_data,
+					direction = 0,
+					speed = 0,
+					char_chass = buf[0].is_you
 				}
 			else
+				local dx = buf[0].x - FIGHTERS[lua_index].x
+				local dy = buf[0].y - FIGHTERS[lua_index].y
+				
+				local speed = math.sqrt(dx * dx + dy * dy)
+				if speed ~= 0 then
+					FIGHTERS[lua_index].direction = math.atan2(dy, dx)
+				end
+				FIGHTERS[lua_index].speed = speed / dt;
+				
 				FIGHTERS[lua_index].x = buf[0].x
 				FIGHTERS[lua_index].y = buf[0].y
 				FIGHTERS[lua_index].hp = buf[0].additional_data
+				FIGHTERS[lua_index].char_class = buf[0].is_you
 			end
 
 			if lua_index == MY_FIGHTER then
@@ -333,14 +351,57 @@ function love.draw(dt)
 
 	for i, val in pairs(FIGHTERS) do
 		if (val.hp > 0) then
-			love.graphics.setColor(0.1, 0.1, 0.1)
 
 			local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
 			local y = BASE_SHIFT_Y + val.y * SCALE + SHIFT_Y
 
-			love.graphics.circle("fill", x, y, 3)
+			if val.char_class == 0 then
+				love.graphics.setColor(1, 1, 1)
+				if val.progress and val.progress > 0 then
+					if math.cos(val.direction) >= 0 then
+						love.graphics.draw(
+							SPRITE_MAGE_CAST, 
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_MAGE_CAST,
+							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif val.speed == 0 then
+					if math.cos(val.direction) >= 0 then
+						love.graphics.draw(
+							SPRITE_MAGE_IDLE, 
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_MAGE_IDLE,
+							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				else	
+					if math.cos(val.direction) >= 0 then
+						love.graphics.draw(
+							SPRITE_MAGE_MOVE, 
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_MAGE_MOVE,
+							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				end
+			else
+				love.graphics.setColor(0.1, 0.1, 0.1)
+				love.graphics.circle("fill", x, y, 3)
+			end
 			
+			love.graphics.setColor(0.1, 0.1, 0.1)
 			love.graphics.circle("line", x, y, SCALE * 0.1)
+
 
 			if (i == MY_SELECTION) then
 				love.graphics.circle("line", x, y, 10)
