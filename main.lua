@@ -67,6 +67,16 @@ function love.load(args)
 	SPRITE_MAGE_IDLE = love.graphics.newImage("mage-idle.png")
 	SPRITE_MAGE_MOVE = love.graphics.newImage("mage-move.png")
 	SPRITE_MAGE_CAST = love.graphics.newImage("mage-cast.png")
+
+	SPRITE_WARRIOR_MOVE_FORWARD_1 = love.graphics.newImage("sprites/warrior/step-1-forward.png")
+	SPRITE_WARRIOR_MOVE_FORWARD_2 = love.graphics.newImage("sprites/warrior/step-2-forward.png")
+	SPRITE_WARRIOR_MOVE_BACK_1 = love.graphics.newImage("sprites/warrior/step-1-back.png")
+	SPRITE_WARRIOR_MOVE_BACK_2 = love.graphics.newImage("sprites/warrior/step-2-back.png")
+	SPRITE_WARRIOR_MOVE_LEFT_1 = love.graphics.newImage("sprites/warrior/step-1-left.png")
+	SPRITE_WARRIOR_MOVE_LEFT_2 = love.graphics.newImage("sprites/warrior/step-2-left.png")
+	SPRITE_WARRIOR_MOVE_RIGHT_1 = love.graphics.newImage("sprites/warrior/step-1-right.png")
+	SPRITE_WARRIOR_MOVE_RIGHT_2 = love.graphics.newImage("sprites/warrior/step-2-right.png")
+	SPRITE_WARRIOR_ATTACK = love.graphics.newImage("sprites/warrior/attack.png")
 end
 
 CONTROL_RATE = 1 / 30
@@ -142,7 +152,8 @@ function love.update(dt)
 					hp = buf[0].additional_data,
 					direction = 0,
 					speed = 0,
-					char_chass = buf[0].is_you
+					char_chass = buf[0].is_you,
+					path_length = 0
 				}
 			else
 				local dx = buf[0].x - FIGHTERS[lua_index].x
@@ -158,6 +169,7 @@ function love.update(dt)
 				FIGHTERS[lua_index].y = buf[0].y
 				FIGHTERS[lua_index].hp = buf[0].additional_data
 				FIGHTERS[lua_index].char_class = buf[0].is_you
+				FIGHTERS[lua_index].path_length = FIGHTERS[lua_index].path_length + speed
 			end
 
 			if lua_index == MY_FIGHTER then
@@ -391,6 +403,78 @@ function love.draw(dt)
 						love.graphics.draw(
 							SPRITE_MAGE_MOVE,
 							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				end
+			elseif val.char_class == 1 then
+				love.graphics.setColor(1, 1, 1)
+				local dx = math.cos(val.direction)
+				local dy = math.sin(val.direction)
+				
+				local step = math.floor((val.path_length % 0.4) / 0.2)
+				
+				if val.progress and val.progress > 0 then
+					if math.cos(val.direction) >= 0 then
+						love.graphics.draw(
+							SPRITE_WARRIOR_ATTACK, 
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_WARRIOR_ATTACK,
+							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif dx > math.abs(dy) * 2 then
+					-- right
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_RIGHT_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_RIGHT_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif -dx > math.abs(dy) * 2 then
+					-- left
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_LEFT_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_LEFT_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif dy * 2 > math.abs(dx) then
+					-- forward
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_FORWARD_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_FORWARD_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				else
+					-- back
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_BACK_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_WARRIOR_MOVE_BACK_2,
+							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					end
 				end
