@@ -39,6 +39,8 @@ SCENE_CHOOSE_CLASS = 1
 SCENE_FIGHT = 2
 
 function love.load(args)
+	love.window.setMode(800, 600) 
+	
 	print("Game started")
 
 	TCP = socket.tcp() 
@@ -54,8 +56,12 @@ function love.load(args)
 	CURRENT_SCENE = SCENE_CHOOSE_LOBBY	
 
 	MY_ID = nil;
+	MY_FIGHTER = nil;
 	MY_SELECTION = nil
-	MY_CLASS = nil
+	MY_CLASS = nili
+
+	BG_IMAGE = love.graphics.newImage("bg.png")
+	BG_FIELD_IMAGE = love.graphics.newImage("bg_field.png")
 end
 
 CONTROL_RATE = 1 / 30
@@ -65,8 +71,15 @@ LAST_DX = 0
 LAST_DY = 0
 
 SCALE = 250
-SHIFT_X = 320
-SHIFT_Y = 320
+
+BASE_SHIFT_X = 400
+BASE_SHIFT_Y = 300
+
+SHIFT_X = 0
+SHIFT_Y = 0
+
+TARGET_SHIFT_X = 0
+TARGET_SHIFT_Y = 0
 
 function love.update(dt)
 	if MY_ID then
@@ -119,28 +132,32 @@ function love.update(dt)
 			local lua_index = tonumber(buf[0].id)
 			if (FIGHTERS[lua_index] == nil) then
 				FIGHTERS[lua_index] = {
-					x = SHIFT_X + buf[0].x * SCALE,
-					y = SHIFT_Y + buf[0].y * SCALE,
+					x = buf[0].x,
+					y = buf[0].y,
 					hp = buf[0].additional_data
 				}
 			else
-				FIGHTERS[lua_index].x = SHIFT_X + buf[0].x * SCALE
-				FIGHTERS[lua_index].y = SHIFT_Y + buf[0].y * SCALE
+				FIGHTERS[lua_index].x = buf[0].x
+				FIGHTERS[lua_index].y = buf[0].y
 				FIGHTERS[lua_index].hp = buf[0].additional_data
 			end
 
+			if lua_index == MY_FIGHTER then
+				TARGET_SHIFT_X = -buf[0].x * SCALE
+				TARGET_SHIFT_Y = -buf[0].y * SCALE
+			end
 		end
 
 		if (buf[0].data_type == 1) then
 			local lua_index = tonumber(buf[0].id)
 			if PROJECTILES[lua_index] == nil then
 				PROJECTILES[lua_index] = {
-					x = SHIFT_X + buf[0].x * SCALE,
-					y = SHIFT_Y + buf[0].y * SCALE
+					x = buf[0].x,
+					y = buf[0].y
 				}
 			else
-				PROJECTILES[lua_index].x = SHIFT_X + buf[0].x * SCALE
-				PROJECTILES[lua_index].y = SHIFT_X + buf[0].y * SCALE
+				PROJECTILES[lua_index].x = buf[0].x
+				PROJECTILES[lua_index].y = buf[0].y
 			end
 		end
 	
@@ -151,6 +168,18 @@ function love.update(dt)
 				
 				local data = ffi.new("to_server[1]")
 				data[0].data_type = 6
+				data[0].id = MY_ID
+				send_payload(data)				
+			end
+		end
+		
+		if (buf[0].data_type == 4) then
+			if buf[0].is_you > 0 then
+				print("I control " .. tostring(buf[0].id));
+				MY_FIGHTER = buf[0].id
+				
+				local data = ffi.new("to_server[1]")
+				data[0].data_type = 10
 				data[0].id = MY_ID
 				send_payload(data)				
 			end
@@ -218,10 +247,29 @@ end
 CLASS_NAME = { "MAGE", "WARRIOR", "ROGUE" }
 
 function love.draw(dt)
+	SHIFT_X = SHIFT_X * 0.9 + TARGET_SHIFT_X * 0.1
+	SHIFT_Y = SHIFT_Y * 0.9 + TARGET_SHIFT_Y * 0.1
+
+	love.graphics.setColor(1, 1, 1)
+	love.graphics.draw(BG_IMAGE, SHIFT_X / 2 - BASE_SHIFT_X / 2, SHIFT_Y / 2 - BASE_SHIFT_Y / 2)
+
+
 	
+	love.graphics.setColor(0, 0, 0)
 	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
-		love.graphics.setColor(1, 1, 1)
 		for i = 0, 2 do
+			love.graphics.setColor(1, 1, 1)
+
+		
+			love.graphics.rectangle(
+				"fill", 
+				LOBBY_SELECTOR_X, 
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
+				LOBBY_SELECTOR_W, 
+				LOBBY_SELECTOR_H
+			)
+			love.graphics.setColor(0, 0, 0)
+
 			love.graphics.rectangle(
 				"line", 
 				LOBBY_SELECTOR_X, 
@@ -230,6 +278,7 @@ function love.draw(dt)
 				LOBBY_SELECTOR_H
 			)
 
+			
 			love.graphics.print(
 				"ENTER ROOM " .. tostring(i), 
 				LOBBY_SELECTOR_X, 
@@ -241,8 +290,17 @@ function love.draw(dt)
 	end
 
 	if CURRENT_SCENE == SCENE_CHOOSE_CLASS then
-		love.graphics.setColor(1, 1, 1)
+		love.graphics.setColor(0, 0, 0)
 		for i = 0, 2 do
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.rectangle(
+				"fill", 
+				LOBBY_SELECTOR_X, 
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
+				LOBBY_SELECTOR_W, 
+				LOBBY_SELECTOR_H
+			)
+			love.graphics.setColor(0, 0, 0)
 			love.graphics.rectangle(
 				"line", 
 				CLASS_SELECTOR_X, 
@@ -260,40 +318,59 @@ function love.draw(dt)
 
 		return
 	end
+		
+	love.graphics.setColor(1, 1, 1)
 
+	love.graphics.draw(
+		BG_FIELD_IMAGE, 
+		SHIFT_X, 
+		SHIFT_Y - 40,
+		0,
+		0.65, 
+		0.65
+	)
+	
 
 	for i, val in pairs(FIGHTERS) do
 		if (val.hp > 0) then
-			love.graphics.setColor(0.5, 0.5, 0.5)
-			love.graphics.circle("fill", val.x, val.y, 3)
+			love.graphics.setColor(0.1, 0.1, 0.1)
+
+			local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
+			local y = BASE_SHIFT_Y + val.y * SCALE + SHIFT_Y
+
+			love.graphics.circle("fill", x, y, 3)
 			
-			love.graphics.circle("line", val.x, val.y, SCALE * 0.1)
+			love.graphics.circle("line", x, y, SCALE * 0.1)
 
 			if (i == MY_SELECTION) then
-				love.graphics.circle("line", val.x, val.y, 10)
+				love.graphics.circle("line", x, y, 10)
 			end
 
 			if val.no_damage_timer and val.no_damage_timer > 0 then
 				love.graphics.setColor(1, 1, 0)
-				love.graphics.circle("line", val.x, val.y, 3)
+				love.graphics.circle("line", x, y, 3)
 			end
 
 			hp_size = 5
 	
 			for hitpoint = 0, val.hp - 1 do
 				love.graphics.setColor(0.6, 0.6, 0.1)
-				love.graphics.rectangle("fill", val.x + 15, val.y - 10 + hitpoint * hp_size, hp_size, hp_size) 
+				love.graphics.rectangle(
+					"fill", x + 15, y - 10 + hitpoint * hp_size, hp_size, hp_size
+				) 
 			end
 			for hitpoint = 0, 4 do
 				love.graphics.setColor(0.9, 1.0, 0.3)
-				love.graphics.rectangle("line", val.x + 15, val.y - 10 + hitpoint * hp_size, hp_size, hp_size) 
+				love.graphics.rectangle(
+					"line", x + 15, y - 10 + hitpoint * hp_size, hp_size, hp_size
+				) 
 			end
 			
 			if val.progress and val.progress > 0 then
 				love.graphics.rectangle(
 					"fill", 
-					val.x - 10, 
-					val.y + 10, 
+					x - 10, 
+					y + 10, 
 					val.progress / val.max_progress * 20, 
 					5
 				)
@@ -304,10 +381,12 @@ function love.draw(dt)
 	love.graphics.setColor(1, 0, 0)
 
 	for i, val in pairs(PROJECTILES) do
-		love.graphics.circle("fill", val.x, val.y, 3)
+		local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
+		local y = BASE_SHIFT_Y + val.y * SCALE + SHIFT_Y
+		love.graphics.circle("fill", x, y, 3)
 	end
 
-	love.graphics.circle("line", SHIFT_X, SHIFT_Y, SCALE)
+	love.graphics.circle("line", BASE_SHIFT_X + SHIFT_X, BASE_SHIFT_Y + SHIFT_Y, SCALE)
 
 
 	love.graphics.print("WASD: MOVE", 20, 20)
