@@ -77,6 +77,18 @@ function love.load(args)
 	SPRITE_WARRIOR_MOVE_RIGHT_1 = love.graphics.newImage("sprites/warrior/step-1-right.png")
 	SPRITE_WARRIOR_MOVE_RIGHT_2 = love.graphics.newImage("sprites/warrior/step-2-right.png")
 	SPRITE_WARRIOR_ATTACK = love.graphics.newImage("sprites/warrior/attack.png")
+
+	SPRITE_ROGUE_MOVE_FORWARD_1 = love.graphics.newImage("sprites/rogue/forward-1.png")
+	SPRITE_ROGUE_MOVE_FORWARD_2 = love.graphics.newImage("sprites/rogue/forward-2.png")
+	SPRITE_ROGUE_MOVE_FORWARD_LEFT_1 = love.graphics.newImage("sprites/rogue/forward-left-1.png")
+	SPRITE_ROGUE_MOVE_FORWARD_LEFT_2 = love.graphics.newImage("sprites/rogue/forward-left-2.png")
+	SPRITE_ROGUE_MOVE_LEFT_1 = love.graphics.newImage("sprites/rogue/left-1.png")
+	SPRITE_ROGUE_MOVE_LEFT_2 = love.graphics.newImage("sprites/rogue/left-2.png")
+	SPRITE_ROGUE_MOVE_BACK_LEFT_1 = love.graphics.newImage("sprites/rogue/back-left-1.png")
+	SPRITE_ROGUE_MOVE_BACK_LEFT_2 = love.graphics.newImage("sprites/rogue/back-left-2.png")
+	SPRITE_ROGUE_MOVE_BACK_1 = love.graphics.newImage("sprites/rogue/back-1.png")
+	SPRITE_ROGUE_MOVE_BACK_2 = love.graphics.newImage("sprites/rogue/back-2.png")
+	SPRITE_ROGUE_ATTACK = love.graphics.newImage("sprites/rogue/attack.png")
 end
 
 CONTROL_RATE = 1 / 30
@@ -410,7 +422,6 @@ function love.draw(dt)
 				love.graphics.setColor(1, 1, 1)
 				local dx = math.cos(val.direction)
 				local dy = math.sin(val.direction)
-				
 				local step = math.floor((val.path_length % 0.4) / 0.2)
 				
 				if val.progress and val.progress > 0 then
@@ -478,6 +489,132 @@ function love.draw(dt)
 						)
 					end
 				end
+			elseif val.char_class == 2 then
+				love.graphics.setColor(1, 1, 1)
+
+				local dx = math.cos(val.direction)
+				local dy = math.sin(val.direction)
+				local step = math.floor((val.path_length % 0.3) / 0.15)
+
+				if val.progress and val.progress > 0 then
+					if math.cos(val.direction) >= 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_ATTACK, 
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_ATTACK,
+							x + 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif dx > math.abs(dy) * 2 then
+					-- right
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_LEFT_1,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_LEFT_2,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif -dx > math.abs(dy) * 2 then
+					-- left
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_LEFT_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_LEFT_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif dy > 2 * math.abs(dx) then
+					-- forward
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif -dy > 2 * math.abs(dx) then
+					-- back
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif 2 * dy > math.abs(dx) and dx < 0 then
+					-- forward left
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_LEFT_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_LEFT_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				elseif 2 * dy > math.abs(dx) and dx > 0 then
+					-- forward right
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_LEFT_1,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_FORWARD_LEFT_2,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif -2 * dy > math.abs(dx) and dx > 0 then
+					-- back right
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_LEFT_1,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_LEFT_2,
+							60 + x - 30, y - 60, 0, -0.25, 0.25
+						)
+					end
+				elseif -2 * dy > math.abs(dx) and dx < 0 then
+					-- back left
+					if step == 0 then
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_LEFT_1,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					else
+						love.graphics.draw(
+							SPRITE_ROGUE_MOVE_BACK_LEFT_2,
+							x - 30, y - 60, 0, 0.25, 0.25
+						)
+					end
+				end
+
+
 			else
 				love.graphics.setColor(0.1, 0.1, 0.1)
 				love.graphics.circle("fill", x, y, 3)
