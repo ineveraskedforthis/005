@@ -100,11 +100,7 @@ local function hp_bar(x, y, w, h, hp, hp_view, max_hp, shield, team, level)
 			draw_image_in_rect(hp_gradient_ally, _x, _y, _w * hp_ratio_actual, _h, 0)
 		end
 
-		if team == 1 then
-			love.graphics.setColor(1, 0.8, 0.8, 1)
-		else
-			love.graphics.setColor(0.35, 0.45, 0.4)
-		end
+		love.graphics.setColor(1, 0.8, 0.8, 1)
 
 		if hp_ratio_view > hp_ratio_actual then
 			love.graphics.rectangle("fill", _x + _w * hp_ratio_actual, _y, _w * (hp_ratio_view - hp_ratio_actual), _h)
@@ -147,6 +143,7 @@ typedef struct {
 	int32_t id;
 	float x;
 	float y;
+	float z;
 	uint8_t data_type;
 	uint8_t is_you;
 	uint8_t additional_data;
@@ -166,7 +163,7 @@ void* memcpy( void *restrict dest, const void *restrict src, size_t count );
 ]]
 
 local from_server_size = 4 * 4;
-local from_server_udp_size = 6 * 4;
+local from_server_udp_size = 7 * 4;
 local to_server_size = 5 * 4;
 local payload_type = "uint8_t[" .. tostring(to_server_size) .. "]"
 
@@ -320,7 +317,7 @@ function love.update(dt)
 					ty = udp_message[0].y,
 					hp = udp_message[0].additional_data,
 					view_hp = udp_message[0].additional_data,
-					direction = 0,
+					direction = udp_message[0].z,
 					speed = 0,
 					char_chass = udp_message[0].is_you,
 					path_length = 0
@@ -329,6 +326,7 @@ function love.update(dt)
 				FIGHTERS[lua_index].tx = udp_message[0].x
 				FIGHTERS[lua_index].ty = udp_message[0].y
 				FIGHTERS[lua_index].hp = udp_message[0].additional_data
+				FIGHTERS[lua_index].direction = udp_message[0].z
 				FIGHTERS[lua_index].char_class = udp_message[0].is_you
 				FIGHTERS[lua_index].flags = udp_message[0].flags
 				-- print(udp_message[0].flags)
@@ -427,9 +425,9 @@ function love.update(dt)
 		local dx = val.tx - val.x
 		local dy = val.ty - val.y
 		local speed = math.sqrt(dx * dx + dy * dy)
-		if speed ~= 0 then
-			val.direction = math.atan2(dy, dx)
-		end
+		-- if speed ~= 0 then
+			-- val.direction = math.atan2(dy, dx)
+		-- end
 		val.x = val.x + dx * 0.5
 		val.y = val.y + dy * 0.5
 		val.path_length = val.path_length + speed / 2
@@ -793,21 +791,26 @@ function love.draw(dt)
 						)
 					end
 				end
-
-
 			else
 				love.graphics.setColor(0.1, 0.1, 0.1)
 				love.graphics.circle("fill", x, y, 3)
 			end
 
 			love.graphics.setColor(0.1, 0.1, 0.1)
-			love.graphics.circle("line", x, y, SCALE * 0.1)
+			love.graphics.circle("line", x, y, SCALE * 0.2)
 
+			if val.flags and bit.band(val.flags, 2) > 0 then
+				love.graphics.print("STUNNED", x - 30, y + 5)
+			end
 
 			if (i == MY_SELECTION) then
 				love.graphics.setColor(1, 1, 0)
 				love.graphics.polygon(
 					"fill",
+					x, y - 80, x + 5, y - 90, x - 5, y - 90
+				)
+				love.graphics.setColor(0, 0, 0)
+				love.graphics.line(
 					x, y - 80, x + 5, y - 90, x - 5, y - 90, x, y - 80
 				)
 				-- love.graphics.circle("line", x, y, 10)
@@ -837,7 +840,7 @@ function love.draw(dt)
 	for i, val in pairs(PROJECTILES) do
 		local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
 		local y = BASE_SHIFT_Y + val.y * SCALE + SHIFT_Y
-		love.graphics.circle("fill", x, y, 3)
+		love.graphics.circle("fill", x, y, 5)
 	end
 
 	love.graphics.circle("line", BASE_SHIFT_X + SHIFT_X, BASE_SHIFT_Y + SHIFT_Y, SCALE)
