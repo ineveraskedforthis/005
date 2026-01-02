@@ -402,6 +402,9 @@ function love.update(dt)
 				if MY_FIGHTER ~= lua_index then
 					FIGHTERS[lua_index] = nil
 				end
+			elseif buf[0].event == 12 then
+				CURRENT_SCENE = SCENE_CHOOSE_LOBBY
+				FIGHTERS = {}
 			elseif buf[0].x > 0 then
 				if FIGHTERS[lua_index] then
 					FIGHTERS[lua_index].progress = buf[0].x
@@ -547,9 +550,12 @@ function love.draw(dt)
 	for i, val in pairs(FIGHTERS) do
 
 		if (val.hp > 0) then
-
 			local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
 			local y = BASE_SHIFT_Y + val.y * SCALE + SHIFT_Y
+
+			love.graphics.setColor(0.4, 0.9, 0.4, 0.5)
+			love.graphics.arc("fill", x, y, SCALE * 0.2, val.direction - 1, val.direction + 1)
+
 
 			if val.char_class == 0 then
 				love.graphics.setColor(1, 1, 1)
@@ -796,9 +802,6 @@ function love.draw(dt)
 				love.graphics.circle("fill", x, y, 3)
 			end
 
-			love.graphics.setColor(0.1, 0.1, 0.1)
-			love.graphics.circle("line", x, y, SCALE * 0.2)
-
 			if val.flags and bit.band(val.flags, 2) > 0 then
 				love.graphics.print("STUNNED", x - 30, y + 5)
 			end
@@ -862,6 +865,7 @@ function love.draw(dt)
 	if MY_CLASS == 2 then
 		love.graphics.print("SPACE: ATTACK", 20, 80)
 		love.graphics.print("J: INVISIBILITY", 20, 100)
+		love.graphics.print("L: JUMP BEHIND", 20, 120)
 	end
 
 	love.graphics.setColor(0, 0, 0)
@@ -1017,6 +1021,20 @@ function love.keypressed(key, scancode, isrepeat)
 		print("send spell")
 		TCP:send(ffi.string(buffer, to_server_size))
 
+	end
+
+	if key == "l" then
+		local data = ffi.new("to_server[1]")
+		data[0].data_type = 11
+		data[0].id = MY_ID
+		local buffer = ffi.new("uint8_t["..tostring(to_server_size).."]")
+		ffi.C.memcpy(buffer, data, to_server_size)
+		print("send spell")
+		TCP:send(ffi.string(buffer, to_server_size))
+	end
+
+	if key == "escape" then
+		MY_SELECTION = nil
 	end
 end
 
