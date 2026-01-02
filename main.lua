@@ -805,7 +805,12 @@ function love.draw(dt)
 
 
 			if (i == MY_SELECTION) then
-				love.graphics.circle("line", x, y, 10)
+				love.graphics.setColor(1, 1, 0)
+				love.graphics.polygon(
+					"fill",
+					x, y - 80, x + 5, y - 90, x - 5, y - 90, x, y - 80
+				)
+				-- love.graphics.circle("line", x, y, 10)
 			end
 
 			if val.no_damage_timer and val.no_damage_timer > 0 then
