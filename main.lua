@@ -1,40 +1,172 @@
 local socket = require("socket")
 local ffi = require("ffi")
+local bit = require("bit")
+
+
+local font_path = "assets/alte-din-1451-mittelschrift/din1451alt.ttf"
+local default_font = love.graphics.newFont(font_path, 14)
+local header_font = love.graphics.newFont(font_path, 24)
+
+---@param colors table[]
+local function gradient_h(colors)
+	local result = love.image.newImageData(#colors, 1)
+	for i, color in ipairs(colors) do
+		local x, y = i - 1, 0
+		print(x, y)
+		result:setPixel(x, y, color[1], color[2], color[3], color[4] or 1)
+	end
+	local result_image = love.graphics.newImage(result)
+	result_image:setFilter('linear', 'linear')
+	return result_image
+end
+
+local function draw_image_in_rect(img, x, y, w, h, r, ox, oy, kx, ky)
+	return love.graphics.draw(img, x, y, r, w / img:getWidth(), h / img:getHeight(), ox, oy, kx, ky)
+end
+
+local hp_gradient_ally = gradient_h({{0.7, 0.9, 0.8}, {100 / 255, 190 / 255, 175 / 255}})
+local hp_gradient_enemy = gradient_h({{0.95, 0.1, 0.05}, {1, 0.11, 0.05}})
+
+---comment
+---@param x number
+---@param y number
+---@param w number
+---@param h number
+---@param hp number
+---@param hp_view number
+---@param max_hp number
+---@param shield number
+---@param team number
+---@param level number?
+local function hp_bar(x, y, w, h, hp, hp_view, max_hp, shield, team, level)
+	local outerouter = 1
+	local outer = 1
+	local shield_offset = 1
+	local fill = 1
+	local inner = 1
+
+	if level then
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.circle("fill", x - h, y + h / 2, h + 2)
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.circle("fill", x - h, y + h / 2, h)
+		love.graphics.setColor(0, 0, 0, 1)
+		local font_height = default_font:getHeight( )
+		love.graphics.printf(tostring(level), x - h * 2, y + h / 2 - font_height / 2, h * 2, "center")
+	end
+
+	-- outer outer border
+	love.graphics.setColor(0, 0, 0)
+	love.graphics.rectangle("fill", x, y, w, h)
+
+	-- outer border
+	love.graphics.setColor(0.29, 0.35, 0.32)
+	love.graphics.rectangle("fill", x + outerouter, y + outerouter, w - outerouter * 2, h - outerouter * 2)
+
+	-- betweeen border fill
+	love.graphics.setColor(0.4, 0.4, 0.4)
+	love.graphics.rectangle("fill", x + outer + outerouter, y + outer + outerouter, w - (outer + outerouter) * 2, h - (outer + outerouter) * 2)
+
+	-- shield
+	local shield_ratio = math.min(1, shield / max_hp / 10)
+	love.graphics.setColor(0.95, 0.95, 1)
+	love.graphics.rectangle("fill", x + shield_offset, y + shield_offset, (w - shield_offset * 2) * shield_ratio, h - shield_offset * 2)
+
+	-- inner border
+	do
+		love.graphics.setColor(0.1, 0.15, 0.1)
+		local margin = outer + fill
+		local _x = x + margin
+		local _y = y + margin
+		local _w = w - 2 * margin
+		local _h = h - 2 * margin
+
+		love.graphics.rectangle("fill", _x, _y, _w, _h)
+	end
+
+	-- hp bar
+	do
+		local hp_ratio_actual = hp / max_hp
+		local hp_ratio_view = hp_view / max_hp
+		local margin = outer + fill + inner
+		local _x = x + margin
+		local _y = y + margin
+		local _w = w - 2 * margin
+		local _h = h - 2 * margin
+		love.graphics.setColor(1, 1, 1)
+		if team == 1 then
+			draw_image_in_rect(hp_gradient_enemy, _x, _y, _w * hp_ratio_actual, _h, 0)
+		else
+			draw_image_in_rect(hp_gradient_ally, _x, _y, _w * hp_ratio_actual, _h, 0)
+		end
+
+		if team == 1 then
+			love.graphics.setColor(1, 0.8, 0.8, 1)
+		else
+			love.graphics.setColor(0.35, 0.45, 0.4)
+		end
+
+		if hp_ratio_view > hp_ratio_actual then
+			love.graphics.rectangle("fill", _x + _w * hp_ratio_actual, _y, _w * (hp_ratio_view - hp_ratio_actual), _h)
+		else
+			love.graphics.rectangle("fill", _x + _w * hp_ratio_view, _y, _w * (hp_ratio_actual - hp_ratio_view), _h)
+		end
+	end
+
+	-- inner border
+	do
+		love.graphics.setColor(0.1, 0.15, 0.1)
+		local margin = outer + fill
+		local _x = x + margin
+		local _y = y + margin
+		local _w = w - 2 * margin
+		local _h = h - 2 * margin
+
+		-- draw inner border color lines to show hp blocks for every X hp:
+		local blocks = max_hp / 200
+		local block_size = _w / blocks
+		for i = 1, blocks do
+			love.graphics.rectangle("fill", _x + i * block_size, _y, 1, _h)
+		end
+	end
+
+end
 
 ffi.cdef[[
-typedef struct { 
-	int32_t id; 
-	float x; 
-	float y; 
+typedef struct {
+	int32_t id;
+	float x;
+	float y;
 	uint8_t data_type;
 	uint8_t is_you;
 	uint8_t additional_data;
-	uint8_t event; 
+	uint8_t event;
 } from_server;
-typedef struct { 
+typedef struct {
 	int32_t timestamp;
-	int32_t id; 
-	float x; 
-	float y; 
+	int32_t id;
+	float x;
+	float y;
 	uint8_t data_type;
 	uint8_t is_you;
 	uint8_t additional_data;
-	uint8_t event; 
+	uint8_t event;
+	int32_t flags;
 } from_server_udp;
-typedef struct { 
+typedef struct {
 	int32_t id;
 	int32_t target;
-	float x; 
-	float y; 
+	float x;
+	float y;
 	uint8_t data_type;
 	uint8_t data_data;
-	uint8_t padding[2]; 
+	uint8_t padding[2];
 } to_server;
 void* memcpy( void *restrict dest, const void *restrict src, size_t count );
 ]]
 
 local from_server_size = 4 * 4;
-local from_server_udp_size = 5 * 4;
+local from_server_udp_size = 6 * 4;
 local to_server_size = 5 * 4;
 local payload_type = "uint8_t[" .. tostring(to_server_size) .. "]"
 
@@ -49,11 +181,12 @@ SCENE_CHOOSE_CLASS = 1
 SCENE_FIGHT = 2
 
 function love.load(args)
-	-- love.window.setMode(800, 600) 
-	
+	love.graphics.setFont(default_font)
+	-- love.window.setMode(800, 600)
+
 	print("Game started")
 
-	TCP = socket.tcp() 	
+	TCP = socket.tcp()
 	TCP:settimeout(0)
 	TCP:connect(args[1] or "127.0.0.1", tonumber(args[2]) or 8080)
 
@@ -68,7 +201,7 @@ function love.load(args)
 	FIGHTERS = {}
 	PROJECTILES = {}
 
-	CURRENT_SCENE = SCENE_CHOOSE_LOBBY	
+	CURRENT_SCENE = SCENE_CHOOSE_LOBBY
 
 	MY_ID = nil;
 	MY_FIGHTER = nil;
@@ -151,7 +284,7 @@ function love.update(dt)
 
 			LAST_DX = dx
 			LAST_DY = dy
-			
+
 			local data = ffi.new("to_server[1]")
 			data[0].x = dx
 			data[0].y = dy
@@ -170,7 +303,7 @@ function love.update(dt)
 	while udp_data do
 		-- print(udp_data, msg);
 		ffi.C.memcpy(udp_message, udp_data, from_server_udp_size);
-		
+
 		-- print(udp_message[0].id)
 		-- print(udp_message[0].x)
 		-- print(udp_message[0].y)
@@ -183,35 +316,26 @@ function love.update(dt)
 				FIGHTERS[lua_index] = {
 					x = udp_message[0].x,
 					y = udp_message[0].y,
+					tx = udp_message[0].x,
+					ty = udp_message[0].y,
 					hp = udp_message[0].additional_data,
+					view_hp = udp_message[0].additional_data,
 					direction = 0,
 					speed = 0,
 					char_chass = udp_message[0].is_you,
 					path_length = 0
 				}
 			else
-
-				local next_x = udp_message[0].x * (1 - decay) + FIGHTERS[lua_index].x * decay
-				local next_y = udp_message[0].y * (1 - decay) + FIGHTERS[lua_index].y * decay
-
-				local dx = next_x - FIGHTERS[lua_index].x
-				local dy = next_y - FIGHTERS[lua_index].y
-				
-				local speed = math.sqrt(dx * dx + dy * dy)
-				if speed ~= 0 then
-					FIGHTERS[lua_index].direction = math.atan2(dy, dx)
-				end
-				FIGHTERS[lua_index].speed = speed / dt;
-				
-				FIGHTERS[lua_index].x = next_x
-				FIGHTERS[lua_index].y = next_y
+				FIGHTERS[lua_index].tx = udp_message[0].x
+				FIGHTERS[lua_index].ty = udp_message[0].y
 				FIGHTERS[lua_index].hp = udp_message[0].additional_data
 				FIGHTERS[lua_index].char_class = udp_message[0].is_you
-				FIGHTERS[lua_index].path_length = FIGHTERS[lua_index].path_length + speed
+				FIGHTERS[lua_index].flags = udp_message[0].flags
+				-- print(udp_message[0].flags)
 			end
 
 			if lua_index == MY_FIGHTER then
-				TARGET_SHIFT_X = -udp_message[0].x * SCALE 
+				TARGET_SHIFT_X = -udp_message[0].x * SCALE
 				TARGET_SHIFT_Y = -udp_message[0].y * SCALE
 			end
 		end
@@ -222,7 +346,7 @@ function love.update(dt)
 	local data, error = TCP:receive(16)
 	local buf = ffi.new("from_server[1]");
 
-	while data ~= nil do	
+	while data ~= nil do
 		ffi.C.memcpy(buf, data, from_server_size);
 
 		if (buf[0].data_type == 1) then
@@ -237,43 +361,47 @@ function love.update(dt)
 				PROJECTILES[lua_index].y = buf[0].y
 			end
 		end
-	
+
 		if (buf[0].data_type == 2) then
 			if buf[0].is_you > 0 then
 				print("I am " .. tostring(buf[0].id));
 				MY_ID = buf[0].id
-				
+
 				local data = ffi.new("to_server[1]")
 				data[0].data_type = 6
 				data[0].id = MY_ID
-				send_payload(data)				
+				send_payload(data)
 			end
 		end
-		
+
 		if (buf[0].data_type == 4) then
 			if buf[0].is_you > 0 then
 				print("I control " .. tostring(buf[0].id));
 				MY_FIGHTER = buf[0].id
-				
+
 				local data = ffi.new("to_server[1]")
 				data[0].data_type = 10
 				data[0].id = MY_ID
-				send_payload(data)				
+				send_payload(data)
 			end
 		end
-		
+
 		if (buf[0].data_type == 3) then
 			print(tostring(buf[0].event))
 			local lua_index = tonumber(buf[0].id)
 			if buf[0].event == 3 then
 				print("no damage")
-				FIGHTERS[lua_index].no_damage_timer = 0.3
+				if (FIGHTERS[lua_index]) then
+					FIGHTERS[lua_index].no_damage_timer = 0.3
+				end
 			elseif buf[0].event == 4 and lua_index == MY_ID then
 				CURRENT_SCENE = SCENE_CHOOSE_CLASS
 			elseif buf[0].event == 5 and lua_index == MY_ID then
 				CURRENT_SCENE = SCENE_FIGHT
-			elseif buf[0].event == 6 or buf[0].event == 9 then
+			elseif buf[0].event == 6 then
 				FIGHTERS[lua_index] = nil
+			elseif buf[0].event == 9 then
+				FIGHTERS[lua_index].invisible = true
 			elseif buf[0].x > 0 then
 				if FIGHTERS[lua_index] then
 					FIGHTERS[lua_index].progress = buf[0].x
@@ -293,6 +421,17 @@ function love.update(dt)
 		if val.no_damage_timer then
 			val.no_damage_timer = math.max(0, val.no_damage_timer - dt)
 		end
+		val.view_hp = val.view_hp * decay + val.hp * (1 - decay)
+		local dx = val.tx - val.x
+		local dy = val.ty - val.y
+		local speed = math.sqrt(dx * dx + dy * dy)
+		if speed ~= 0 then
+			val.direction = math.atan2(dy, dx)
+		end
+		val.x = val.x + dx * 0.5
+		val.y = val.y + dy * 0.5
+		val.path_length = val.path_length + speed / 2
+		val.speed = speed / dt / 2;
 	end
 end
 
@@ -305,7 +444,7 @@ CLASS_SELECTOR_Y = 20
 CLASS_SELECTOR_H = 20
 CLASS_SELECTOR_W = 200
 
-function in_rect(cx, cy, x, y, w, h) 
+function in_rect(cx, cy, x, y, w, h)
 	if cx < x then
 		return false
 	end
@@ -327,85 +466,86 @@ function love.draw(dt)
 
 	love.graphics.setColor(1, 1, 1)
 	love.graphics.draw(BG_IMAGE, SHIFT_X / 2 - BASE_SHIFT_X / 2, SHIFT_Y / 2 - BASE_SHIFT_Y / 2)
-	
-	
+
+
 	love.graphics.setColor(0, 0, 0)
 	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
 		for i = 0, 2 do
 			love.graphics.setColor(1, 1, 1)
-			
-			
+
+
 			love.graphics.rectangle(
-				"fill", 
-				LOBBY_SELECTOR_X, 
-				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
-				LOBBY_SELECTOR_W, 
+				"fill",
+				LOBBY_SELECTOR_X,
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i,
+				LOBBY_SELECTOR_W,
 				LOBBY_SELECTOR_H
 			)
 			love.graphics.setColor(0, 0, 0)
-			
+
 			love.graphics.rectangle(
-				"line", 
-				LOBBY_SELECTOR_X, 
-				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
-				LOBBY_SELECTOR_W, 
+				"line",
+				LOBBY_SELECTOR_X,
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i,
+				LOBBY_SELECTOR_W,
 				LOBBY_SELECTOR_H
 			)
-			
-			
+
+
 			love.graphics.print(
-				"ENTER ROOM " .. tostring(i), 
-				LOBBY_SELECTOR_X, 
+				"ENTER ROOM " .. tostring(i),
+				LOBBY_SELECTOR_X,
 				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i
-			)				
+			)
 		end
-		
+
 		return
 	end
-	
+
 	if CURRENT_SCENE == SCENE_CHOOSE_CLASS then
 		love.graphics.setColor(0, 0, 0)
 		for i = 0, 2 do
 			love.graphics.setColor(1, 1, 1)
 			love.graphics.rectangle(
-				"fill", 
-				LOBBY_SELECTOR_X, 
-				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i, 
-				LOBBY_SELECTOR_W, 
+				"fill",
+				LOBBY_SELECTOR_X,
+				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i,
+				LOBBY_SELECTOR_W,
 				LOBBY_SELECTOR_H
 			)
 			love.graphics.setColor(0, 0, 0)
 			love.graphics.rectangle(
-				"line", 
-				CLASS_SELECTOR_X, 
-				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i, 
-				CLASS_SELECTOR_W, 
+				"line",
+				CLASS_SELECTOR_X,
+				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i,
+				CLASS_SELECTOR_W,
 				CLASS_SELECTOR_H
 			)
-			
+
 			love.graphics.print(
-				"SELECT CLASS " .. CLASS_NAME[i + 1], 
-				CLASS_SELECTOR_X, 
+				"SELECT CLASS " .. CLASS_NAME[i + 1],
+				CLASS_SELECTOR_X,
 				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i
 			)
 		end
-		
+
 		return
 	end
-	
+
 	love.graphics.setColor(1, 1, 1)
-	
+
 	love.graphics.draw(
-		BG_FIELD_IMAGE, 
-		SHIFT_X, 
+		BG_FIELD_IMAGE,
+		SHIFT_X,
 		SHIFT_Y - 40,
 		0,
-		0.65, 
+		0.65,
 		0.65
 	)
-	
-	
+
+
 	for i, val in pairs(FIGHTERS) do
+
 		if (val.hp > 0) then
 
 			local x = BASE_SHIFT_X + val.x * SCALE + SHIFT_X
@@ -416,7 +556,7 @@ function love.draw(dt)
 				if val.progress and val.progress > 0 then
 					if math.cos(val.direction) >= 0 then
 						love.graphics.draw(
-							SPRITE_MAGE_CAST, 
+							SPRITE_MAGE_CAST,
 							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					else
@@ -428,7 +568,7 @@ function love.draw(dt)
 				elseif val.speed == 0 then
 					if math.cos(val.direction) >= 0 then
 						love.graphics.draw(
-							SPRITE_MAGE_IDLE, 
+							SPRITE_MAGE_IDLE,
 							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					else
@@ -437,10 +577,10 @@ function love.draw(dt)
 							x + 30, y - 60, 0, -0.25, 0.25
 						)
 					end
-				else	
+				else
 					if math.cos(val.direction) >= 0 then
 						love.graphics.draw(
-							SPRITE_MAGE_MOVE, 
+							SPRITE_MAGE_MOVE,
 							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					else
@@ -455,11 +595,11 @@ function love.draw(dt)
 				local dx = math.cos(val.direction)
 				local dy = math.sin(val.direction)
 				local step = math.floor((val.path_length % 0.4) / 0.2)
-				
+
 				if val.progress and val.progress > 0 then
 					if math.cos(val.direction) >= 0 then
 						love.graphics.draw(
-							SPRITE_WARRIOR_ATTACK, 
+							SPRITE_WARRIOR_ATTACK,
 							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					else
@@ -522,7 +662,13 @@ function love.draw(dt)
 					end
 				end
 			elseif val.char_class == 2 then
-				love.graphics.setColor(1, 1, 1)
+				-- print(val.flags, bit.band(val.flags, 1))
+				if bit.band(val.flags, 1) > 0 then
+					love.graphics.setColor(0.2, 0.2, 0.2, 0.1)
+				else
+					love.graphics.setColor(1, 1, 1)
+				end
+				-- love.graphics.setColor(1, 1, 1)
 
 				local dx = math.cos(val.direction)
 				local dy = math.sin(val.direction)
@@ -531,7 +677,7 @@ function love.draw(dt)
 				if val.progress and val.progress > 0 then
 					if math.cos(val.direction) >= 0 then
 						love.graphics.draw(
-							SPRITE_ROGUE_ATTACK, 
+							SPRITE_ROGUE_ATTACK,
 							x - 30, y - 60, 0, 0.25, 0.25
 						)
 					else
@@ -651,7 +797,7 @@ function love.draw(dt)
 				love.graphics.setColor(0.1, 0.1, 0.1)
 				love.graphics.circle("fill", x, y, 3)
 			end
-			
+
 			love.graphics.setColor(0.1, 0.1, 0.1)
 			love.graphics.circle("line", x, y, SCALE * 0.1)
 
@@ -665,27 +811,14 @@ function love.draw(dt)
 				love.graphics.circle("line", x, y, 3)
 			end
 
-			hp_size = 5
-	
-			for hitpoint = 0, val.hp - 1 do
-				love.graphics.setColor(0.6, 0.6, 0.1)
-				love.graphics.rectangle(
-					"fill", x + 15, y - 10 + hitpoint * hp_size, hp_size, hp_size
-				) 
-			end
-			for hitpoint = 0, 4 do
-				love.graphics.setColor(0.9, 1.0, 0.3)
-				love.graphics.rectangle(
-					"line", x + 15, y - 10 + hitpoint * hp_size, hp_size, hp_size
-				) 
-			end
-			
+			hp_bar(x - 30, y - 75, 60, 10, val.hp, val.view_hp, 5, 0, 0)
+
 			if val.progress and val.progress > 0 then
 				love.graphics.rectangle(
-					"fill", 
-					x - 10, 
-					y + 10, 
-					val.progress / val.max_progress * 20, 
+					"fill",
+					x - 10,
+					y + 10,
+					val.progress / val.max_progress * 20,
 					5
 				)
 			end
@@ -724,7 +857,7 @@ function love.draw(dt)
 	love.graphics.setColor(0, 0, 0)
 	love.graphics.print("Current FPS: "..tostring(love.timer.getFPS( )), 10, 400)
 
-	if MY_ID and FIGHTERS[MY_ID] then		
+	if MY_ID and FIGHTERS[MY_ID] then
 		love.graphics.print(tostring(FIGHTERS[MY_ID].x * 1000), 10, 440)
 		love.graphics.print(tostring(FIGHTERS[MY_ID].y * 1000), 10, 460)
 	end
@@ -739,7 +872,7 @@ function love.mousepressed(x, y, button)
 
 	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
 		for i = 0, 2 do
-			if in_rect(x, y, 
+			if in_rect(x, y,
 				LOBBY_SELECTOR_X,
 				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i,
 				LOBBY_SELECTOR_W,
@@ -777,7 +910,7 @@ function love.mousepressed(x, y, button)
 
 	if false then
 		local data = ffi.new("to_server[1]")
-		data[0].x = (x - SHIFT_X) / SCALE 
+		data[0].x = (x - SHIFT_X) / SCALE
 		data[0].y = (y - SHIFT_Y) / SCALE
 		data[0].data_type = 0
 		data[0].id = MY_ID
@@ -803,9 +936,9 @@ function love.keypressed(key, scancode, isrepeat)
 		for id, _ in pairs(FIGHTERS) do
 			clamp = math.max(clamp, id)
 		end
-		
+
 		MY_SELECTION = MY_SELECTION + 1
-		
+
 		for i = 1, 2 do
 			while (FIGHTERS[MY_SELECTION] == nil) and MY_SELECTION <= clamp do
 				MY_SELECTION = MY_SELECTION + 1
@@ -847,7 +980,7 @@ function love.keypressed(key, scancode, isrepeat)
 
 	if key == "j" then
 		local data = ffi.new("to_server[1]")
-		
+
 		data[0].id = MY_ID
 
 		if MY_CLASS == 1 then
@@ -867,13 +1000,13 @@ function love.keypressed(key, scancode, isrepeat)
 
 	if key == "k" then
 		local data = ffi.new("to_server[1]")
-		data[0].data_type = 3 
+		data[0].data_type = 3
 		data[0].id = MY_ID
 		local buffer = ffi.new("uint8_t["..tostring(to_server_size).."]")
 		ffi.C.memcpy(buffer, data, to_server_size)
 		print("send spell")
 		TCP:send(ffi.string(buffer, to_server_size))
-		
+
 	end
 end
 
