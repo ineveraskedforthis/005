@@ -401,7 +401,9 @@ function love.update(dt)
 			elseif buf[0].event == 6 then
 				FIGHTERS[lua_index] = nil
 			elseif buf[0].event == 9 then
-				FIGHTERS[lua_index].invisible = true
+				if MY_FIGHTER ~= lua_index then
+					FIGHTERS[lua_index] = nil
+				end
 			elseif buf[0].x > 0 then
 				if FIGHTERS[lua_index] then
 					FIGHTERS[lua_index].progress = buf[0].x
