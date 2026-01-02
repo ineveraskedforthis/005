@@ -12,6 +12,16 @@ typedef struct {
 	uint8_t event; 
 } from_server;
 typedef struct { 
+	int32_t timestamp;
+	int32_t id; 
+	float x; 
+	float y; 
+	uint8_t data_type;
+	uint8_t is_you;
+	uint8_t additional_data;
+	uint8_t event; 
+} from_server_udp;
+typedef struct { 
 	int32_t id;
 	int32_t target;
 	float x; 
@@ -24,7 +34,7 @@ void* memcpy( void *restrict dest, const void *restrict src, size_t count );
 ]]
 
 local from_server_size = 4 * 4;
-
+local from_server_udp_size = 5 * 4;
 local to_server_size = 5 * 4;
 local payload_type = "uint8_t[" .. tostring(to_server_size) .. "]"
 
@@ -39,14 +49,19 @@ SCENE_CHOOSE_CLASS = 1
 SCENE_FIGHT = 2
 
 function love.load(args)
-	love.window.setMode(800, 600) 
+	-- love.window.setMode(800, 600) 
 	
 	print("Game started")
 
-	TCP = socket.tcp() 
-	
+	TCP = socket.tcp() 	
 	TCP:settimeout(0)
 	TCP:connect(args[1] or "127.0.0.1", tonumber(args[2]) or 8080)
+
+	UDP = socket.udp()
+	UDP:settimeout(0)
+	UDP:setpeername(args[1] or "127.0.0.1", tonumber(args[2]) or 8080)
+
+	UDP:send("0")
 
 	print("Connected")
 
@@ -109,6 +124,11 @@ TARGET_SHIFT_X = 0
 TARGET_SHIFT_Y = 0
 
 function love.update(dt)
+	decay = math.exp(-dt * 10)
+	decay_slow = math.exp(-dt)
+	SHIFT_X = SHIFT_X * decay_slow + TARGET_SHIFT_X * (1 - decay_slow)
+	SHIFT_Y = SHIFT_Y * decay_slow + TARGET_SHIFT_Y * (1 - decay_slow)
+
 	if MY_ID then
 		local dx = 0
 		local dy = 0
@@ -142,34 +162,40 @@ function love.update(dt)
 		end
 	end
 
+	-- print("update")
 
-	local data, error = TCP:receive(16)
+	local udp_data, msg = UDP:receive(from_server_udp_size)
+	local udp_message = ffi.new("from_server_udp[1]");
 
-	while data ~= nil do	
-		local buf = ffi.new("from_server[1]");
-		ffi.C.memcpy(buf, data, from_server_size);
+	while udp_data do
+		-- print(udp_data, msg);
+		ffi.C.memcpy(udp_message, udp_data, from_server_udp_size);
+		
+		-- print(udp_message[0].id)
+		-- print(udp_message[0].x)
+		-- print(udp_message[0].y)
+		-- print(udp_message[0].data_type)
+		-- print("---")
 
-		--print(buf[0].id)
-		--print(buf[0].x)
-		--print(buf[0].y)
-		--print(buf[0].data_type)
-		--print("---")
-	
-		if (buf[0].data_type == 0) then
-			local lua_index = tonumber(buf[0].id)
+		if (udp_message[0].data_type == 0) then
+			local lua_index = tonumber(udp_message[0].id)
 			if (FIGHTERS[lua_index] == nil) then
 				FIGHTERS[lua_index] = {
-					x = buf[0].x,
-					y = buf[0].y,
-					hp = buf[0].additional_data,
+					x = udp_message[0].x,
+					y = udp_message[0].y,
+					hp = udp_message[0].additional_data,
 					direction = 0,
 					speed = 0,
-					char_chass = buf[0].is_you,
+					char_chass = udp_message[0].is_you,
 					path_length = 0
 				}
 			else
-				local dx = buf[0].x - FIGHTERS[lua_index].x
-				local dy = buf[0].y - FIGHTERS[lua_index].y
+
+				local next_x = udp_message[0].x * (1 - decay) + FIGHTERS[lua_index].x * decay
+				local next_y = udp_message[0].y * (1 - decay) + FIGHTERS[lua_index].y * decay
+
+				local dx = next_x - FIGHTERS[lua_index].x
+				local dy = next_y - FIGHTERS[lua_index].y
 				
 				local speed = math.sqrt(dx * dx + dy * dy)
 				if speed ~= 0 then
@@ -177,18 +203,27 @@ function love.update(dt)
 				end
 				FIGHTERS[lua_index].speed = speed / dt;
 				
-				FIGHTERS[lua_index].x = buf[0].x
-				FIGHTERS[lua_index].y = buf[0].y
-				FIGHTERS[lua_index].hp = buf[0].additional_data
-				FIGHTERS[lua_index].char_class = buf[0].is_you
+				FIGHTERS[lua_index].x = next_x
+				FIGHTERS[lua_index].y = next_y
+				FIGHTERS[lua_index].hp = udp_message[0].additional_data
+				FIGHTERS[lua_index].char_class = udp_message[0].is_you
 				FIGHTERS[lua_index].path_length = FIGHTERS[lua_index].path_length + speed
 			end
 
 			if lua_index == MY_FIGHTER then
-				TARGET_SHIFT_X = -buf[0].x * SCALE
-				TARGET_SHIFT_Y = -buf[0].y * SCALE
+				TARGET_SHIFT_X = -udp_message[0].x * SCALE 
+				TARGET_SHIFT_Y = -udp_message[0].y * SCALE
 			end
 		end
+
+		udp_data, msg = UDP:receive(from_server_udp_size)
+	end
+
+	local data, error = TCP:receive(16)
+	local buf = ffi.new("from_server[1]");
+
+	while data ~= nil do	
+		ffi.C.memcpy(buf, data, from_server_size);
 
 		if (buf[0].data_type == 1) then
 			local lua_index = tonumber(buf[0].id)
@@ -289,20 +324,17 @@ end
 CLASS_NAME = { "MAGE", "WARRIOR", "ROGUE" }
 
 function love.draw(dt)
-	SHIFT_X = SHIFT_X * 0.9 + TARGET_SHIFT_X * 0.1
-	SHIFT_Y = SHIFT_Y * 0.9 + TARGET_SHIFT_Y * 0.1
 
 	love.graphics.setColor(1, 1, 1)
 	love.graphics.draw(BG_IMAGE, SHIFT_X / 2 - BASE_SHIFT_X / 2, SHIFT_Y / 2 - BASE_SHIFT_Y / 2)
-
-
+	
 	
 	love.graphics.setColor(0, 0, 0)
 	if CURRENT_SCENE == SCENE_CHOOSE_LOBBY then
 		for i = 0, 2 do
 			love.graphics.setColor(1, 1, 1)
-
-		
+			
+			
 			love.graphics.rectangle(
 				"fill", 
 				LOBBY_SELECTOR_X, 
@@ -311,7 +343,7 @@ function love.draw(dt)
 				LOBBY_SELECTOR_H
 			)
 			love.graphics.setColor(0, 0, 0)
-
+			
 			love.graphics.rectangle(
 				"line", 
 				LOBBY_SELECTOR_X, 
@@ -319,7 +351,7 @@ function love.draw(dt)
 				LOBBY_SELECTOR_W, 
 				LOBBY_SELECTOR_H
 			)
-
+			
 			
 			love.graphics.print(
 				"ENTER ROOM " .. tostring(i), 
@@ -327,10 +359,10 @@ function love.draw(dt)
 				LOBBY_SELECTOR_Y + LOBBY_SELECTOR_H * i
 			)				
 		end
-
+		
 		return
 	end
-
+	
 	if CURRENT_SCENE == SCENE_CHOOSE_CLASS then
 		love.graphics.setColor(0, 0, 0)
 		for i = 0, 2 do
@@ -350,19 +382,19 @@ function love.draw(dt)
 				CLASS_SELECTOR_W, 
 				CLASS_SELECTOR_H
 			)
-
+			
 			love.graphics.print(
 				"SELECT CLASS " .. CLASS_NAME[i + 1], 
 				CLASS_SELECTOR_X, 
 				CLASS_SELECTOR_Y + CLASS_SELECTOR_H * i
 			)
 		end
-
+		
 		return
 	end
-		
+	
 	love.graphics.setColor(1, 1, 1)
-
+	
 	love.graphics.draw(
 		BG_FIELD_IMAGE, 
 		SHIFT_X, 
@@ -372,7 +404,7 @@ function love.draw(dt)
 		0.65
 	)
 	
-
+	
 	for i, val in pairs(FIGHTERS) do
 		if (val.hp > 0) then
 
@@ -687,6 +719,14 @@ function love.draw(dt)
 	if MY_CLASS == 2 then
 		love.graphics.print("SPACE: ATTACK", 20, 80)
 		love.graphics.print("J: INVISIBILITY", 20, 100)
+	end
+
+	love.graphics.setColor(0, 0, 0)
+	love.graphics.print("Current FPS: "..tostring(love.timer.getFPS( )), 10, 400)
+
+	if MY_ID and FIGHTERS[MY_ID] then		
+		love.graphics.print(tostring(FIGHTERS[MY_ID].x * 1000), 10, 440)
+		love.graphics.print(tostring(FIGHTERS[MY_ID].y * 1000), 10, 460)
 	end
 end
 
